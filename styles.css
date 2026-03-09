@@ -297,7 +297,7 @@ nav a.active{color:var(--accent);background:rgba(79,138,255,0.1);}
 .researcher-header{padding:40px 0 28px;display:flex;align-items:center;justify-content:space-between;}
 .researcher-header h1{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;}
 .r-badge{background:linear-gradient(135deg,rgba(255,204,68,0.15),rgba(255,107,74,0.1));border:1px solid rgba(255,204,68,0.3);color:var(--gold);border-radius:20px;padding:5px 14px;font-size:0.75rem;font-weight:700;}
-.r-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
+.r-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:28px;}
 .r-participants-table{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:28px;}
 .r-section-title{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;margin-bottom:14px;}
 .rtable{width:100%;border-collapse:collapse;font-size:0.82rem;}
