@@ -6,6 +6,7 @@
 <title>NeuroSpark — Brain Training</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -224,22 +225,62 @@
 <!-- RESEARCHER PAGE -->
 <div id="page-researcher" class="page" style="display:none">
   <div class="researcher-header">
-    <div><h1>🔬 Researcher Dashboard</h1><p style="color:var(--muted);font-size:0.88rem;margin-top:4px">All participants & their game data</p></div>
-    <div style="display:flex;align-items:center;gap:10px">
+    <div>
+      <h1>🔬 Researcher Dashboard</h1>
+      <p style="color:var(--muted);font-size:0.88rem;margin-top:4px">Live data — updates automatically as participants play</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span id="r-refresh-badge" style="font-size:0.72rem;color:var(--accent3);background:rgba(0,229,176,0.1);border:1px solid rgba(0,229,176,0.25);border-radius:20px;padding:5px 12px;">🔄 Refreshes in 30s</span>
+      <button style="background:rgba(79,138,255,0.12);border:1px solid rgba(79,138,255,0.3);color:var(--accent);border-radius:8px;padding:6px 14px;font-size:0.78rem;cursor:pointer;font-family:'DM Sans',sans-serif;" onclick="rManualRefresh()">↻ Refresh Now</button>
       <span class="r-badge">👩‍🔬 Researcher</span>
       <button class="auth-btn" style="padding:8px 16px;font-size:0.85rem;background:linear-gradient(135deg,#7c3aed,#4f46e5);border-radius:10px;border:none;color:#fff;cursor:pointer;font-weight:700;" onclick="enterDemoMode()">🎮 Try Demo Mode</button>
-      <button class="logout-btn" onclick="logout()">Sign Out</button>
+      <button class="logout-btn" onclick="stopResearcherRefresh();logout()">Sign Out</button>
     </div>
   </div>
+
+  <!-- Summary cards -->
   <div class="r-summary" id="r-summary"></div>
+
+  <!-- Charts -->
+  <div id="r-charts" style="display:none;margin-bottom:32px">
+    <div class="r-section-title">📊 Analytics</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px">
+        <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Score Trend Over Time</div>
+        <div style="position:relative;height:200px"><canvas id="r-chart-timeline"></canvas></div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px">
+        <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Sessions Per Game</div>
+        <div style="position:relative;height:200px"><canvas id="r-chart-games"></canvas></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px">
+        <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Avg Score Per Game</div>
+        <div style="position:relative;height:200px"><canvas id="r-chart-avggame"></canvas></div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px">
+        <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Avg Score by Gender</div>
+        <div style="position:relative;height:200px"><canvas id="r-chart-gender"></canvas></div>
+      </div>
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px">
+        <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">First vs Latest Score</div>
+        <div style="position:relative;height:200px"><canvas id="r-chart-improve"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Participants table -->
   <div class="r-section-title">👥 Participants</div>
   <div class="r-participants-table">
     <table class="rtable">
-      <thead><tr><th>Participant ID</th><th>Name</th><th>Age</th><th>Gender</th><th>Games Played</th><th>Best Score</th><th>Joined</th><th></th></tr></thead>
+      <thead><tr><th>Participant ID</th><th>Name</th><th>Age</th><th>Gender</th><th>Games Played</th><th>Best Score</th><th>Avg Score</th><th>Joined</th><th></th></tr></thead>
       <tbody id="r-tbody"></tbody>
     </table>
     <div id="r-empty" class="empty-state" style="display:none"><div class="empty-icon">👥</div>No participants have registered yet.</div>
   </div>
+
+  <!-- All sessions table -->
   <div class="r-section-title">📋 All Sessions</div>
   <div class="r-participants-table">
     <table class="rtable">
