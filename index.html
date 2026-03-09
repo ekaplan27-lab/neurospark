@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeuroSpark — Brain Training</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="logo">Neuro<span style="-webkit-text-fill-color:inherit;opacity:0.55;font-weight:400">Spark</span></div>
+  <nav>
+    <a class="active" onclick="showPage('train',this)">Train</a>
+    <a onclick="showPage('insights',this)">Insights</a>
+    <a onclick="showPage('profile',this)">Profile</a>
+  </nav>
+  <div class="streak">🔥 <span id="streakDays">0</span> Games Today</div>
+  <div id="header-user" style="display:none;align-items:center;gap:8px">
+    <span class="user-chip">👤 <span id="header-username"></span></span>
+    <button id="demo-back-btn" class="logout-btn" style="display:none;" onclick="exitDemoMode()">← Back to Dashboard</button>
+    <button id="signout-btn" class="logout-btn" onclick="logout()">Sign Out</button>
+  </div>
+</header>
+
+<!-- TRAIN PAGE -->
+<div id="page-train" class="page active">
+<div class="hero">
+  <div>
+    <div class="hero-title">Level Up Your<br><em>Cognitive Edge</em></div>
+    <div class="hero-sub">Five minutes of daily training improves memory, focus, and processing speed.</div>
+  </div>
+  <div class="ring-wrap">
+    <svg viewBox="0 0 110 110"><defs><linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4f8aff"/><stop offset="100%" stop-color="#a259ff"/></linearGradient></defs><circle class="ring-bg" cx="55" cy="55" r="49"/><circle class="ring-fill" id="ring" cx="55" cy="55" r="49"/></svg>
+    <div class="ring-center"><div class="ring-num" id="bscore">0</div><div class="ring-lbl">Brain Score</div></div>
+  </div>
+</div>
+<div class="stats-row">
+  <div class="stat"><div class="stat-icon si-blue">🎮</div><div><div class="stat-val" id="t-games">0</div><div class="stat-name">Games Played</div></div></div>
+  <div class="stat"><div class="stat-icon si-purple">🏆</div><div><div class="stat-val" id="t-best">0</div><div class="stat-name">Best Score</div></div></div>
+  <div class="stat"><div class="stat-icon si-green">⚡</div><div><div class="stat-val" id="t-total">0</div><div class="stat-name">Total Points</div></div></div>
+  <div class="stat"><div class="stat-icon si-orange">⏱️</div><div><div class="stat-val" id="t-time">0m</div><div class="stat-name">Time Trained</div></div></div>
+</div>
+<div class="section">
+  <div class="sec-hdr"><div class="sec-title">Today's Training</div></div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchGame('memory')">🃏 Memory Match</button>
+    <button class="tab" onclick="switchGame('sequence')">🔮 Sequence</button>
+    <button class="tab" onclick="switchGame('speed')">⚡ Speed Find</button>
+  </div>
+  <div id="g-memory" class="panel">
+    <div class="hud">
+      <div class="hud-item"><div class="hud-val c-accent" id="ms">0</div><div class="hud-lbl">Score</div></div>
+      <div class="hud-item"><div class="hud-val" id="mt">1:30</div><div class="hud-lbl">Time</div></div>
+      <div class="hud-item"><div class="hud-val c-green" id="mp">0/8</div><div class="hud-lbl">Pairs</div></div>
+    </div>
+    <div class="pbar"><div class="pfill" id="mpb" style="width:0%"></div></div>
+    <p class="instr">Find all <strong>matching pairs</strong> before time runs out</p>
+    <div class="mem-grid" id="mg"></div>
+    <button class="play-btn" onclick="startMem()" id="mbtn">▶ Start Game</button>
+    <div class="limit-msg" id="mem-limit">🔒 You've played Memory Match 3 times. Check Insights to review your scores!</div>
+  </div>
+  <div id="g-sequence" class="panel" style="display:none">
+    <div class="hud">
+      <div class="hud-item"><div class="hud-val c-accent" id="ss">0</div><div class="hud-lbl">Score</div></div>
+      <div class="hud-item"><div class="hud-val" id="sl">1</div><div class="hud-lbl">Level</div></div>
+      <div class="hud-item"><div class="hud-val c-orange" id="sv">♥♥♥</div><div class="hud-lbl">Lives</div></div>
+    </div>
+    <div class="pbar"><div class="pfill" id="spb" style="width:5%"></div></div>
+    <p class="instr" id="si">Watch the sequence, then <strong>repeat it</strong></p>
+    <div class="seq-grid" id="sg"></div>
+    <button class="play-btn" onclick="startSeq()" id="sbtn">▶ Start Game</button>
+    <div class="limit-msg" id="seq-limit">🔒 You've played Sequence 3 times. Check Insights to review your scores!</div>
+  </div>
+  <div id="g-speed" class="panel" style="display:none">
+    <div class="hud">
+      <div class="hud-item"><div class="hud-val c-accent" id="fs">0</div><div class="hud-lbl">Score</div></div>
+      <div class="hud-item"><div class="hud-val c-orange" id="ft">60</div><div class="hud-lbl">Seconds</div></div>
+      <div class="hud-item"><div class="hud-val c-green" id="fc">x1</div><div class="hud-lbl">Combo</div></div>
+    </div>
+    <div class="pbar"><div class="pfill" id="fpb" style="width:100%"></div></div>
+    <p class="instr">Find all <strong id="ftgt">?</strong>'s in the grid</p>
+    <div class="spd-grid" id="fgrid"></div>
+    <button class="play-btn" onclick="startSpd()" id="fbtn">▶ Start Game</button>
+    <div class="limit-msg" id="spd-limit">🔒 You've played Speed Find 3 times. Check Insights to review your scores!</div>
+  </div>
+</div>
+<div class="section">
+  <div class="sec-hdr"><div class="sec-title">All Games</div></div>
+  <div class="games-grid">
+    <div class="gc feat"><div class="gt tb-blue"><div style="font-size:3.6rem;filter:drop-shadow(0 0 18px rgba(79,138,255,0.6))">🧩</div></div><div class="gi"><div class="gtag tg-mem">Memory</div><div class="gname">Pattern Vault</div><div class="gdesc">Memorize the pattern, then reconstruct it from memory across increasing grid sizes.</div><div class="gmeta"><button class="play-btn" onclick="openOv('pv')">▶ Play Now</button><div class="best">Best: <strong id="pvb">—</strong></div></div></div></div>
+    <div class="gc"><div class="gt tb-purple"><div style="font-size:2.8rem;filter:drop-shadow(0 0 14px rgba(162,89,255,0.6))">🔮</div></div><div class="gi"><div class="gtag tg-att">Attention</div><div class="gname">Focus Filter</div><div class="gdesc">Tap only the target emoji among distractors.</div><div class="gmeta"><button class="play-btn" onclick="openOv('ff')">▶ Play</button><div class="best">Best: <strong id="ffb">—</strong></div></div></div></div>
+    <div class="gc"><div class="gt tb-green"><div style="font-size:2.8rem;filter:drop-shadow(0 0 14px rgba(0,229,176,0.5))">🌀</div></div><div class="gi"><div class="gtag tg-spd">Speed</div><div class="gname">Rapid Recall</div><div class="gdesc">Race the clock matching words to definitions.</div><div class="gmeta"><button class="play-btn" onclick="openOv('rr')">▶ Play</button><div class="best">Best: <strong id="rrb">—</strong></div></div></div></div>
+    <div class="gc"><div class="gt tb-orange"><div style="font-size:2.8rem;filter:drop-shadow(0 0 14px rgba(255,107,74,0.5))">🎯</div></div><div class="gi"><div class="gtag tg-prb">Logic</div><div class="gname">Logic Ladder</div><div class="gdesc">Solve cascading logic puzzles with time pressure.</div><div class="gmeta"><button class="play-btn" onclick="openOv('ll')">▶ Play</button><div class="best">Best: <strong id="llb">—</strong></div></div></div></div>
+    <div class="gc"><div class="gt tb-teal"><div style="font-size:2.8rem;filter:drop-shadow(0 0 14px rgba(0,200,200,0.5))">🔢</div></div><div class="gi"><div class="gtag tg-mem">Memory</div><div class="gname">Number Path</div><div class="gdesc">Memorize positions then tap numbers in ascending order.</div><div class="gmeta"><button class="play-btn" onclick="openOv('np')">▶ Play</button><div class="best">Best: <strong id="npb">—</strong></div></div></div></div>
+    <div class="gc"><div class="gt tb-pink"><div style="font-size:2.8rem;filter:drop-shadow(0 0 14px rgba(255,107,200,0.6))">⬆️</div></div><div class="gi"><div class="gtag tg-rxn">Reaction</div><div class="gname">Arrow Rush</div><div class="gdesc">Hit the correct arrow key before the window closes. Speed increases with your streak!</div><div class="gmeta"><button class="play-btn" onclick="openOv('ar')">▶ Play</button><div class="best">Best: <strong id="arb">—</strong></div></div></div></div>
+  </div>
+</div>
+<div class="section">
+  <div class="sec-hdr"><div class="sec-title">Achievements</div></div>
+  <div class="ach-row">
+    <div class="ach locked" id="ach-1"><div class="ach-icon">🏆</div><div><div class="ach-name">First Win</div><div class="ach-desc">Complete any game</div></div></div>
+    <div class="ach locked" id="ach-5"><div class="ach-icon">🎯</div><div><div class="ach-name">5 Games</div><div class="ach-desc">Play 5 games total</div></div></div>
+    <div class="ach locked" id="ach-10"><div class="ach-icon">🌟</div><div><div class="ach-name">Dedicated</div><div class="ach-desc">Play 10 games total</div></div></div>
+    <div class="ach locked" id="ach-bs"><div class="ach-icon">🧬</div><div><div class="ach-name">Neuro Legend</div><div class="ach-desc">Brain Score 1000</div></div></div>
+  </div>
+</div>
+</div>
+
+<!-- INSIGHTS PAGE -->
+<div id="page-insights" class="page">
+  <div class="page-header"><h1>📊 Your Insights</h1><p>Performance breakdown across all your games</p></div>
+  <div class="summary-grid">
+    <div class="sum-card"><div class="sc-label">Total Sessions</div><div class="sc-val" id="i-total">0</div><div class="sc-sub">games recorded</div></div>
+    <div class="sum-card"><div class="sc-label">Best Score</div><div class="sc-val c-accent" id="i-best">0</div><div class="sc-sub">all-time high</div></div>
+    <div class="sum-card"><div class="sc-label">Avg Score</div><div class="sc-val c-green" id="i-avg">0</div><div class="sc-sub">per session</div></div>
+    <div class="sum-card"><div class="sc-label">Time Trained</div><div class="sc-val c-orange" id="i-time">0m</div><div class="sc-sub">total play time</div></div>
+  </div>
+  <div class="ins-section">
+    <div class="ins-section-title">🎮 Per-Game Stats</div>
+    <div id="game-cards" class="game-cards-grid"></div>
+    <div id="no-game-data" class="empty-state"><div class="empty-icon">🎮</div>Play some games and check back here!</div>
+  </div>
+  <div class="history-wrap">
+    <div class="ins-section-title">📋 Session History</div>
+    <div class="history-table-box">
+      <table class="htable">
+        <thead><tr><th>#</th><th>Game</th><th>Score</th><th>Duration</th><th>Details</th><th>Time</th></tr></thead>
+        <tbody id="hist-body"></tbody>
+      </table>
+      <div id="hist-empty" class="empty-state"><div class="empty-icon">📋</div>No sessions yet — finish a game to see it here!</div>
+    </div>
+  </div>
+</div>
+
+<!-- PROFILE PAGE -->
+<div id="page-profile" class="page">
+  <div class="profile-top">
+    <div class="avatar-circle">🧠</div>
+    <div class="profile-meta">
+      <h2 id="pname">Player</h2>
+      <div class="joined" id="pjoined">Session started just now</div>
+    </div>
+  </div>
+  <div class="p-stats-grid">
+    <div class="psc"><div class="psc-icon">🎮</div><div class="psc-val c-accent" id="p-games">0</div><div class="psc-lbl">Games Played</div></div>
+    <div class="psc"><div class="psc-icon">🏆</div><div class="psc-val" style="color:var(--gold)" id="p-best">0</div><div class="psc-lbl">Best Score</div></div>
+    <div class="psc"><div class="psc-icon">⚡</div><div class="psc-val c-green" id="p-total">0</div><div class="psc-lbl">Total Points</div></div>
+    <div class="psc"><div class="psc-icon">⏱️</div><div class="psc-val c-orange" id="p-time">0m</div><div class="psc-lbl">Time Trained</div></div>
+  </div>
+  <div class="profile-section"><div class="ps-title">📈 Game Performance</div><div id="perf-list"></div></div>
+  <div class="profile-section"><div class="ps-title">🥇 Top 3 Personal Bests</div><div id="pb-list"></div></div>
+  <div class="profile-section">
+    <div class="ps-title">💾 Export My Data</div>
+    <button class="export-btn" onclick="exportCSV()">⬇️ Download CSV</button>
+  </div>
+</div>
+
+<!-- OVERLAY -->
+<div class="overlay" id="overlay">
+  <div class="ov-inner">
+    <div class="ov-hdr">
+      <div><div class="ov-title" id="ot">Game</div><div class="ov-sub" id="os"></div></div>
+      <button class="ov-exit" onclick="closeOv()">✕ Exit</button>
+    </div>
+    <div id="ov-instructions" style="display:none;text-align:center;padding:20px 10px">
+      <div id="ov-instr-icon" style="font-size:3.5rem;margin-bottom:12px"></div>
+      <div id="ov-instr-text" style="font-size:1rem;line-height:1.7;color:var(--text);max-width:480px;margin:0 auto 20px"></div>
+      <div style="color:var(--muted);font-size:0.85rem;margin-bottom:16px">Game starts in <span id="ov-countdown" style="color:var(--accent);font-weight:800;font-size:1.1rem">30</span>s</div>
+      <button class="play-btn" onclick="skipInstructions()">&#9654; Start Now</button>
+    </div>
+    <div id="ov-game-content">
+      <div class="ov-hud">
+        <div class="hud-item"><div class="hud-val c-accent" id="ovs">0</div><div class="hud-lbl">Score</div></div>
+        <div class="hud-item"><div class="hud-val c-orange" id="ovt">—</div><div class="hud-lbl" id="ovtl">Time</div></div>
+        <div class="hud-item"><div class="hud-val c-green" id="ovx">—</div><div class="hud-lbl" id="ovxl">Level</div></div>
+      </div>
+      <div class="pbar"><div class="pfill" id="ovp" style="width:0%"></div></div>
+      <p class="instr" id="ovinstr"></p>
+      <div id="ov-pv" style="display:none"><div class="pv-grid" id="pvgrid"></div><button class="play-btn" id="pvbtn" onclick="pvGo()" style="margin-top:14px">&#9654; Start</button></div>
+      <div id="ov-ff" style="display:none"><div class="ff-show" id="ffshow"></div><div class="ff-grid" id="ffgrid"></div></div>
+      <div id="ov-rr" style="display:none"><div class="rr-word" id="rrword"></div><div class="rr-opts" id="rropts"></div><div class="fb" id="rrfb"></div></div>
+      <div id="ov-ll" style="display:none"><div class="ll-q" id="llq"></div><div class="ll-opts" id="llopts"></div><div class="fb" id="llfb"></div></div>
+      <div id="ov-np" style="display:none"><p class="instr" id="nplbl" style="margin-bottom:10px"></p><div class="np-grid" id="npgrid"></div><button class="play-btn" id="npbtn" onclick="npGo()" style="margin-top:14px;display:none">&#9654; I've memorized it!</button></div>
+      <div id="ov-ar" style="display:none">
+        <div class="ar-arena">
+          <div class="ar-window-bar"><div class="ar-window-fill" id="ar-wfill" style="width:100%"></div></div>
+          <div style="position:relative;display:inline-block">
+            <div class="ar-combo-flash" id="ar-combo-flash"></div>
+            <div class="ar-arrow-display idle" id="ar-display">⬆️</div>
+          </div>
+          <div class="ar-streak-bar" id="ar-pips"></div>
+          <div class="ar-keys">
+            <div class="ar-key-row"><div class="ar-key" id="ark-up">↑</div></div>
+            <div class="ar-key-row">
+              <div class="ar-key" id="ark-left">←</div>
+              <div class="ar-key" id="ark-down">↓</div>
+              <div class="ar-key" id="ark-right">→</div>
+            </div>
+          </div>
+          <button class="play-btn" id="ar-startbtn" onclick="arStart()" style="margin-top:4px">▶ Start</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="m-emoji" id="me">🎉</div>
+    <div class="m-title" id="mt2">Nice Work!</div>
+    <div class="m-score" id="msc">0</div>
+    <div class="m-slbl">Points Earned</div>
+    <div class="m-sub" id="msub"></div>
+    <div class="m-btns">
+      <button class="btn-sec" onclick="closeModal()">← Menu</button>
+      <button class="btn-pri" id="modal-replay" onclick="replayModal()">Play Again ↺</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESEARCHER PAGE -->
+<div id="page-researcher" class="page" style="display:none">
+  <div class="researcher-header">
+    <div><h1>🔬 Researcher Dashboard</h1><p style="color:var(--muted);font-size:0.88rem;margin-top:4px">All participants & their game data</p></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="r-badge">👩‍🔬 Researcher</span>
+      <button class="auth-btn" style="padding:8px 16px;font-size:0.85rem;background:linear-gradient(135deg,#7c3aed,#4f46e5);border-radius:10px;border:none;color:#fff;cursor:pointer;font-weight:700;" onclick="enterDemoMode()">🎮 Try Demo Mode</button>
+      <button class="logout-btn" onclick="logout()">Sign Out</button>
+    </div>
+  </div>
+  <div class="r-summary" id="r-summary"></div>
+  <div class="r-section-title">👥 Participants</div>
+  <div class="r-participants-table">
+    <table class="rtable">
+      <thead><tr><th>Participant ID</th><th>Name</th><th>Age</th><th>Gender</th><th>Games Played</th><th>Best Score</th><th>Joined</th><th></th></tr></thead>
+      <tbody id="r-tbody"></tbody>
+    </table>
+    <div id="r-empty" class="empty-state" style="display:none"><div class="empty-icon">👥</div>No participants have registered yet.</div>
+  </div>
+  <div class="r-section-title">📋 All Sessions</div>
+  <div class="r-participants-table">
+    <table class="rtable">
+      <thead><tr><th>#</th><th>Participant</th><th>Game</th><th>Score</th><th>Duration</th><th>Details</th><th>Time</th></tr></thead>
+      <tbody id="r-sessions-tbody"></tbody>
+    </table>
+    <div id="r-sessions-empty" class="empty-state" style="display:none"><div class="empty-icon">📋</div>No sessions recorded yet.</div>
+  </div>
+  <div style="margin-top:10px"><button class="export-btn" onclick="exportAllCSV()">⬇️ Export All Data (CSV)</button></div>
+</div>
+</div><!-- /app -->
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">NeuroSpark</div>
+    <div class="auth-tagline">Brain Training Research Platform</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" onclick="showAssentModal()">Create Account</button>
+    </div>
+    <div class="auth-form" id="form-login">
+      <div class="field"><label>Participant ID</label><input id="l-pid" type="text" placeholder="e.g. P001" autocomplete="username"/></div>
+      <div class="field"><label>Password</label><input id="l-pass" type="password" placeholder="Your password"/></div>
+      <div class="auth-err" id="l-err"></div>
+      <button class="auth-btn" onclick="doLogin()">Sign In →</button>
+      <div class="auth-divider">or</div>
+      <div class="researcher-hint">Researcher? <a onclick="switchAuthTab('researcher')">Sign in here</a></div>
+    </div>
+    <div class="auth-form hidden" id="form-register">
+      <div style="background:rgba(0,229,176,0.08);border:1px solid rgba(0,229,176,0.25);border-radius:10px;padding:10px 14px;font-size:0.76rem;color:var(--accent3);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+        ✅ <span>You have read and agreed to the research participation notice.</span>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Participant ID *</label><input id="r-pid" type="text" placeholder="e.g. P001"/></div>
+        <div class="field"><label>Full Name *</label><input id="r-name" type="text" placeholder="Your name"/></div>
+      </div>
+      <div class="form-row">
+        <div class="field"><label>Age *</label><input id="r-age" type="number" min="5" max="120" placeholder="Age"/></div>
+        <div class="field"><label>Gender *</label>
+          <select id="r-gender"><option value="">Select…</option><option>Male</option><option>Female</option><option>Non-binary</option><option>Prefer not to say</option></select>
+        </div>
+      </div>
+      <div class="field"><label>Password *</label><input id="r-pass" type="password" placeholder="Choose a password (min 4 chars)"/></div>
+      <div class="field"><label>Confirm Password *</label><input id="r-pass2" type="password" placeholder="Repeat password"/></div>
+      <div class="auth-err" id="r-err"></div>
+      <button class="auth-btn" id="register-btn" onclick="doRegister()">Create Account →</button>
+    </div>
+    <div class="auth-form hidden" id="form-researcher">
+      <div style="text-align:center;font-size:0.82rem;color:var(--muted);margin-bottom:10px">🔬 Researcher Portal</div>
+      <div class="field"><label>Researcher Password</label><input id="res-pass" type="password" placeholder="Researcher password"/></div>
+      <div class="auth-err" id="res-err"></div>
+      <button class="auth-btn" onclick="doResearcherLogin()">Enter Dashboard →</button>
+      <div class="researcher-hint" style="margin-top:10px"><a onclick="switchAuthTab('login')">← Back to participant login</a></div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+
+<!-- ISEF ASSENT MODAL -->
+<div id="assent-modal">
+  <div class="assent-box">
+    <div class="assent-header">
+      <div class="assent-icon">📋</div>
+      <h2>Research Participation Notice</h2>
+      <p>Please read carefully before creating an account &mdash; NeuroSpark Brain Training Study</p>
+      <div class="assent-badge">🔬 ISEF 2025–2026 Human Participant Guidelines</div>
+    </div>
+
+    <div class="assent-section">
+      <div class="assent-section-title">🎯 Purpose of This Study</div>
+      <p>This study investigates how brain-training games affect cognitive performance (memory, attention, processing speed, and logic) in high school students. Your gameplay data will be analyzed to identify patterns in cognitive skill development. This study follows the <a href="https://sspcdn.blob.core.windows.net/files/Documents/SEP/ISEF/2026/Rules/Book.pdf" target="_blank">ISEF 2025–2026 Human Participant Research Guidelines</a>.</p>
+    </div>
+
+    <div class="assent-section">
+      <div class="assent-section-title">🎮 What You Will Be Asked to Do</div>
+      <p>You will play brain-training mini-games on this platform (Memory Match, Sequence, Speed Find, and more). The app automatically records your scores, response times, and accuracy during each session. You may be asked to play across multiple sessions.</p>
+    </div>
+
+    <div class="assent-section">
+      <div class="assent-section-title">⏱️ Time Required</div>
+      <p>Each game session takes approximately <strong>2–5 minutes</strong>. Total study participation may involve multiple sessions over several days or weeks, as directed by the researcher.</p>
+    </div>
+
+    <div class="assent-section">
+      <div class="assent-section-title">⚠️ Potential Risks</div>
+      <p>There are <strong>no known physical or psychological risks</strong> associated with this study. The games are non-stressful and designed for general audiences. You may stop at any time if you feel uncomfortable.</p>
+    </div>
+
+    <div class="assent-section">
+      <div class="assent-section-title">🔒 Anonymity & Confidentiality</div>
+      <p>Your privacy is protected in the following ways:</p>
+      <div class="assent-highlight">
+        • Your <strong>name and Participant ID will never appear</strong> in any published report, presentation, or display.<br>
+        • Only <strong>anonymous, aggregated data</strong> (e.g., average scores across participants) will be reported.<br>
+        • Raw data is accessible only to the researcher and is stored securely.<br>
+        • No data will be shared with third parties.
+      </div>
+    </div>
+
+    <div class="assent-section">
+      <div class="assent-section-title">🙋 Voluntary Participation</div>
+      <p>Participation in this study is <strong>completely voluntary</strong>. You may choose not to participate, stop at any time, or skip any question or game session without any negative consequence. Choosing not to participate will not affect your standing in any class or activity.</p>
+    </div>
+
+    <div class="assent-section">
+      <div class="assent-section-title">📞 Contact & Questions</div>
+      <p>If you have any questions about this study, please contact the student researcher or their adult supervisor before proceeding. You have the right to ask questions at any time during the study.</p>
+    </div>
+
+    <div class="assent-checks">
+      <div class="assent-check-item">
+        <input type="checkbox" id="assent-c1" onchange="updateAssentButton()">
+        <label for="assent-c1">I understand the <strong>purpose</strong> of this study and what I will be asked to do.</label>
+      </div>
+      <div class="assent-check-item">
+        <input type="checkbox" id="assent-c2" onchange="updateAssentButton()">
+        <label for="assent-c2">I understand that my data will be collected <strong>anonymously</strong> and my name will never be published.</label>
+      </div>
+      <div class="assent-check-item">
+        <input type="checkbox" id="assent-c3" onchange="updateAssentButton()">
+        <label for="assent-c3">I understand that participation is <strong>completely voluntary</strong> and I may stop at any time with no consequences.</label>
+      </div>
+      <div class="assent-check-item">
+        <input type="checkbox" id="assent-c4" onchange="updateAssentButton()">
+        <label for="assent-c4">I understand there are <strong>no known risks</strong> to participating in this study.</label>
+      </div>
+      <div class="assent-check-item">
+        <input type="checkbox" id="assent-c5" onchange="updateAssentButton()">
+        <label for="assent-c5">I am <strong>voluntarily agreeing to participate</strong>. (If I am under 18, a parent or guardian has given permission for me to participate.) <span style="color:#ff5a5a;font-weight:700">*</span></label>
+      </div>
+    </div>
+
+    <div class="assent-footer">
+      <button class="assent-agree-btn" id="assent-agree-btn" onclick="acceptAssent()" disabled>
+        ✓ I Understand &amp; Agree to Participate
+      </button>
+      <button class="assent-decline-btn" onclick="declineAssent()">
+        Decline — Return to Sign In
+      </button>
+      <div class="assent-progress">You must check all boxes above to proceed.</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
