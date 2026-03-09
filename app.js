@@ -192,12 +192,25 @@ function exitDemoMode() {
   showResearcherDashboard();
 }
 
+// ── auto-refresh interval handle ──
+let _rInterval = null;
+let _rCharts = {};
+
 async function showResearcherDashboard() {
   document.querySelectorAll('.page').forEach(p=>p.style.display='none');
   document.getElementById('page-researcher').style.display='block';
   document.getElementById('header-user').style.display='flex';
   document.getElementById('header-username').textContent='🔬 Researcher';
   document.querySelector('nav').style.display='none';
+  await _loadAndRender();
+  // auto-refresh every 30 seconds while researcher is viewing
+  if(_rInterval) clearInterval(_rInterval);
+  _rInterval = setInterval(_loadAndRender, 30000);
+  // update the countdown badge
+  _startRefreshCountdown();
+}
+
+async function _loadAndRender() {
   let index=[];
   try{const idx=await window.storage.get('ns-participant-index',true);if(idx)index=JSON.parse(idx.value);}catch(e){}
   const participants=[];
@@ -207,61 +220,193 @@ async function showResearcherDashboard() {
   renderResearcherDashboard(participants);
 }
 
+let _countdownHandle = null;
+function _startRefreshCountdown() {
+  if(_countdownHandle) clearInterval(_countdownHandle);
+  let secs = 30;
+  const el = document.getElementById('r-refresh-badge');
+  if(!el) return;
+  el.textContent = `🔄 Refreshes in ${secs}s`;
+  _countdownHandle = setInterval(()=>{
+    secs--;
+    if(secs <= 0) secs = 30;
+    if(el) el.textContent = `🔄 Refreshes in ${secs}s`;
+  }, 1000);
+}
+
+function rManualRefresh() {
+  _loadAndRender();
+  let secs = 30;
+  const el = document.getElementById('r-refresh-badge');
+  if(_countdownHandle) clearInterval(_countdownHandle);
+  if(el) el.textContent = `🔄 Refreshes in ${secs}s`;
+  _countdownHandle = setInterval(()=>{
+    secs--;
+    if(secs <= 0) secs = 30;
+    if(el) el.textContent = `🔄 Refreshes in ${secs}s`;
+  }, 1000);
+}
+
+function stopResearcherRefresh() {
+  if(_rInterval) { clearInterval(_rInterval); _rInterval = null; }
+  if(_countdownHandle) { clearInterval(_countdownHandle); _countdownHandle = null; }
+}
+
 function renderResearcherDashboard(participants) {
-  const totalSessions=participants.reduce((a,p)=>a+p.sessionCount,0);
-  const allScores=participants.flatMap(p=>p.sessions.map(s=>s.score));
-  const bestScore=allScores.length?Math.max(...allScores):0;
-  const avgScore=allScores.length?Math.round(allScores.reduce((a,b)=>a+b,0)/allScores.length):0;
+  // ── summary numbers ──
+  const totalSessions = participants.reduce((a,p)=>a+p.sessionCount,0);
+  const allScores = participants.flatMap(p=>p.sessions.map(s=>s.score));
+  const bestScore = allScores.length ? Math.max(...allScores) : 0;
+  const avgScore  = allScores.length ? Math.round(allScores.reduce((a,b)=>a+b,0)/allScores.length) : 0;
+  const totalSecs = participants.flatMap(p=>p.sessions.map(s=>s.duration||0)).reduce((a,b)=>a+b,0);
+
   document.getElementById('r-summary').innerHTML=`
     <div class="sum-card"><div class="sc-label">Participants</div><div class="sc-val c-accent">${participants.length}</div><div class="sc-sub">registered</div></div>
     <div class="sum-card"><div class="sc-label">Total Sessions</div><div class="sc-val c-green">${totalSessions}</div><div class="sc-sub">across all users</div></div>
-    <div class="sum-card"><div class="sc-label">Best Score</div><div class="sc-val" style="color:var(--gold)">${bestScore}</div><div class="sc-sub">all participants</div></div>
-    <div class="sum-card"><div class="sc-label">Avg Score</div><div class="sc-val c-orange">${avgScore}</div><div class="sc-sub">per session</div></div>`;
-  const tbody=document.getElementById('r-tbody');
-  const empty=document.getElementById('r-empty');
+    <div class="sum-card"><div class="sc-label">Best Score</div><div class="sc-val" style="color:var(--gold)">${bestScore.toLocaleString()}</div><div class="sc-sub">all participants</div></div>
+    <div class="sum-card"><div class="sc-label">Avg Score</div><div class="sc-val c-orange">${avgScore.toLocaleString()}</div><div class="sc-sub">per session</div></div>
+    <div class="sum-card"><div class="sc-label">Total Play Time</div><div class="sc-val c-accent">${Math.floor(totalSecs/60)}m</div><div class="sc-sub">${totalSecs}s total</div></div>`;
+
+  // ── charts ──
+  _renderCharts(participants);
+
+  // ── participants table ──
+  const tbody = document.getElementById('r-tbody');
+  const empty = document.getElementById('r-empty');
   tbody.innerHTML='';
-  if(!participants.length){empty.style.display='block';return;}
-  empty.style.display='none';
-  participants.forEach((p,pi)=>{
-    const joinDate=new Date(p.joinedTs).toLocaleDateString();
-    tbody.innerHTML+=`<tr>
-      <td><span class="user-chip">🆔 ${p.pid}</span></td>
-      <td style="font-weight:600">${p.name}</td><td>${p.age}</td><td>${p.gender}</td>
-      <td>${p.sessionCount}</td><td class="hi-score">${p.bestScore.toLocaleString()}</td>
-      <td style="color:var(--muted);font-size:0.75rem">${joinDate}</td>
-      <td style="display:flex;gap:6px;align-items:center;">
-        <button class="r-expand-btn" onclick="toggleDetail(${pi})">▶ Details</button>
-        <button class="r-expand-btn" style="color:var(--warn);border-color:rgba(255,107,74,0.3);" onclick="clearParticipantData('${p.pid}','${p.name}')">🗑 Clear</button>
-      </td>
-    </tr>
-    <tr class="r-detail-row" id="detail-row-${pi}"><td colspan="8"><div class="r-detail-inner" id="detail-${pi}">${buildDetailTable(p)}</div></td></tr>`;
-  });
+  if(!participants.length){empty.style.display='block';}
+  else {
+    empty.style.display='none';
+    participants.forEach((p,pi)=>{
+      const joinDate=new Date(p.joinedTs).toLocaleDateString();
+      const avgP = p.sessions.length ? Math.round(p.sessions.reduce((a,s)=>a+s.score,0)/p.sessions.length) : 0;
+      tbody.innerHTML+=`<tr>
+        <td><span class="user-chip">🆔 ${p.pid}</span></td>
+        <td style="font-weight:600">${p.name}</td><td>${p.age}</td><td>${p.gender}</td>
+        <td>${p.sessionCount}</td>
+        <td class="hi-score">${p.bestScore.toLocaleString()}</td>
+        <td style="color:var(--muted)">${avgP.toLocaleString()}</td>
+        <td style="color:var(--muted);font-size:0.75rem">${joinDate}</td>
+        <td style="display:flex;gap:6px;align-items:center;">
+          <button class="r-expand-btn" onclick="toggleDetail(${pi})">▶ Details</button>
+          <button class="r-expand-btn" style="color:var(--warn);border-color:rgba(255,107,74,0.3);" onclick="clearParticipantData('${p.pid}','${p.name}')">🗑 Clear</button>
+        </td>
+      </tr>
+      <tr class="r-detail-row" id="detail-row-${pi}"><td colspan="9"><div class="r-detail-inner" id="detail-${pi}">${buildDetailTable(p)}</div></td></tr>`;
+    });
+  }
+
+  // ── all sessions table ──
   const allSessions=participants.flatMap(p=>p.sessions.map(s=>({...s,pName:p.name,pPid:p.pid})));
   allSessions.sort((a,b)=>new Date(b.ts)-new Date(a.ts));
   const stbody=document.getElementById('r-sessions-tbody');
   const sempty=document.getElementById('r-sessions-empty');
   stbody.innerHTML='';
-  if(!allSessions.length){sempty.style.display='block';return;}
-  sempty.style.display='none';
-  allSessions.forEach((r,i)=>{
-    const m=GM[r.key];
-    const timeStr=new Date(r.ts).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    stbody.innerHTML+=`<tr>
-      <td style="color:var(--muted);font-size:0.75rem">#${allSessions.length-i}</td>
-      <td><span class="user-chip">🆔 ${r.pPid}</span> ${r.pName}</td>
-      <td><span class="badge ${m.badge}">${m.icon} ${m.name}</span></td>
-      <td class="hi-score">${r.score.toLocaleString()}</td>
-      <td style="color:var(--muted)">${fmtT(r.duration)}</td>
-      <td style="color:var(--muted);font-size:0.78rem">${m.extraLbl}: <strong style="color:var(--text)">${r.extra}</strong></td>
-      <td style="color:var(--muted);font-size:0.75rem">${timeStr}</td>
-    </tr>`;
-  });
+  if(!allSessions.length){sempty.style.display='block';}
+  else {
+    sempty.style.display='none';
+    allSessions.forEach((r,i)=>{
+      const m=GM[r.key]||{name:r.key,icon:'🎮',badge:'b-mem',extraLbl:'Detail'};
+      const timeStr=new Date(r.ts).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      stbody.innerHTML+=`<tr>
+        <td style="color:var(--muted);font-size:0.75rem">#${allSessions.length-i}</td>
+        <td><span class="user-chip">🆔 ${r.pPid}</span> ${r.pName}</td>
+        <td><span class="badge ${m.badge}">${m.icon} ${m.name}</span></td>
+        <td class="hi-score">${r.score.toLocaleString()}</td>
+        <td style="color:var(--muted)">${fmtT(r.duration)}</td>
+        <td style="color:var(--muted);font-size:0.78rem">${m.extraLbl}: <strong style="color:var(--text)">${r.extra}</strong></td>
+        <td style="color:var(--muted);font-size:0.75rem">${timeStr}</td>
+      </tr>`;
+    });
+  }
   window._researcherParticipants=participants;
+}
+
+function _renderCharts(participants) {
+  const allSessions = participants.flatMap(p=>p.sessions.map(s=>({...s,pName:p.name,pPid:p.pid,age:p.age,gender:p.gender})));
+  if(!allSessions.length) {
+    document.getElementById('r-charts').style.display='none';
+    return;
+  }
+  document.getElementById('r-charts').style.display='block';
+
+  // destroy old charts
+  Object.values(_rCharts).forEach(c=>{try{c.destroy();}catch(e){}});
+  _rCharts={};
+
+  Chart.defaults.color='#6b7a99';
+  Chart.defaults.borderColor='rgba(255,255,255,0.06)';
+
+  // 1. Scores over time (line)
+  const sorted=[...allSessions].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+  const timeLabels=sorted.map((_,i)=>`#${i+1}`);
+  const timeScores=sorted.map(s=>s.score);
+  const avgLine=timeScores.map((_,i)=>Math.round(timeScores.slice(0,i+1).reduce((a,b)=>a+b,0)/(i+1)));
+  _rCharts.timeline=new Chart(document.getElementById('r-chart-timeline'),{
+    type:'line',
+    data:{labels:timeLabels,datasets:[
+      {label:'Score',data:timeScores,borderColor:'#4f8aff',backgroundColor:'rgba(79,138,255,0.08)',pointRadius:3,pointBackgroundColor:'#4f8aff',tension:0.3,fill:true},
+      {label:'Running Avg',data:avgLine,borderColor:'#00e5b0',borderDash:[5,4],pointRadius:0,tension:0.3,fill:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:12,font:{family:'DM Sans',size:11}}}},scales:{x:{ticks:{maxTicksLimit:10,font:{size:10}}},y:{beginAtZero:true,ticks:{font:{size:10}}}}}
+  });
+
+  // 2. Sessions per game (bar)
+  const gameCounts={};
+  allSessions.forEach(s=>{const n=GM[s.key]?GM[s.key].name:s.key; gameCounts[n]=(gameCounts[n]||0)+1;});
+  const gameNames=Object.keys(gameCounts);
+  const gameColors=gameNames.map(n=>{const e=Object.values(GM).find(g=>g.name===n);return e?e.color:'#4f8aff';});
+  _rCharts.games=new Chart(document.getElementById('r-chart-games'),{
+    type:'bar',
+    data:{labels:gameNames,datasets:[{label:'Sessions',data:Object.values(gameCounts),backgroundColor:gameColors.map(c=>c+'33'),borderColor:gameColors,borderWidth:2,borderRadius:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}}},y:{beginAtZero:true,ticks:{stepSize:1,font:{size:10}}}}}
+  });
+
+  // 3. Avg score per game (horizontal bar)
+  const gameScores={};
+  allSessions.forEach(s=>{const n=GM[s.key]?GM[s.key].name:s.key;if(!gameScores[n])gameScores[n]=[];gameScores[n].push(s.score);});
+  const avgGameNames=Object.keys(gameScores);
+  const avgGameVals=avgGameNames.map(n=>Math.round(gameScores[n].reduce((a,b)=>a+b,0)/gameScores[n].length));
+  const avgGameColors=avgGameNames.map(n=>{const e=Object.values(GM).find(g=>g.name===n);return e?e.color:'#4f8aff';});
+  _rCharts.avgGame=new Chart(document.getElementById('r-chart-avggame'),{
+    type:'bar',
+    data:{labels:avgGameNames,datasets:[{label:'Avg Score',data:avgGameVals,backgroundColor:avgGameColors.map(c=>c+'33'),borderColor:avgGameColors,borderWidth:2,borderRadius:6}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}
+  });
+
+  // 4. Score distribution by gender (grouped bar)
+  const genders=[...new Set(participants.map(p=>p.gender).filter(Boolean))];
+  const genderAvgs=genders.map(g=>{
+    const sc=participants.filter(p=>p.gender===g).flatMap(p=>p.sessions.map(s=>s.score));
+    return sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length):0;
+  });
+  const gColors=['#4f8aff','#a259ff','#00e5b0','#ff6bc8','#ffcc44'];
+  _rCharts.gender=new Chart(document.getElementById('r-chart-gender'),{
+    type:'doughnut',
+    data:{labels:genders,datasets:[{data:genderAvgs,backgroundColor:gColors.slice(0,genders.length).map(c=>c+'55'),borderColor:gColors.slice(0,genders.length),borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{family:'DM Sans',size:11}}}}}
+  });
+
+  // 5. Score improvement: first vs last session per participant (scatter)
+  const scatterData=participants.filter(p=>p.sessions.length>=2).map(p=>{
+    const sorted=[...p.sessions].sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+    return{x:sorted[0].score, y:sorted[sorted.length-1].score, label:p.pid};
+  });
+  _rCharts.improve=new Chart(document.getElementById('r-chart-improve'),{
+    type:'scatter',
+    data:{datasets:[
+      {label:'Participants',data:scatterData,backgroundColor:'rgba(162,89,255,0.5)',borderColor:'#a259ff',pointRadius:7,pointHoverRadius:9},
+      {label:'No change line',data:[{x:0,y:0},{x:Math.max(...scatterData.map(d=>Math.max(d.x,d.y)),100)+200,y:Math.max(...scatterData.map(d=>Math.max(d.x,d.y)),100)+200}],type:'line',borderColor:'rgba(255,255,255,0.15)',borderDash:[4,4],pointRadius:0,fill:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:12,font:{family:'DM Sans',size:11}}},tooltip:{callbacks:{label:d=>d.raw.label?`${d.raw.label}: first=${d.raw.x} → last=${d.raw.y}`:''}}},scales:{x:{title:{display:true,text:'First Session Score',font:{size:10}},beginAtZero:true},y:{title:{display:true,text:'Most Recent Score',font:{size:10}},beginAtZero:true}}}
+  });
 }
 
 function buildDetailTable(p) {
   if(!p.sessions.length)return'<p style="color:var(--muted);font-size:0.82rem;padding:8px 0">No sessions yet.</p>';
-  const rows=p.sessions.map((r,i)=>{const m=GM[r.key];const dt=new Date(r.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const rows=p.sessions.map((r,i)=>{
+    const m=GM[r.key]||{name:r.key,icon:'🎮',badge:'b-mem',extraLbl:'Detail'};
+    const dt=new Date(r.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     return`<tr><td style="color:var(--muted);font-size:0.75rem">#${i+1}</td><td><span class="badge ${m.badge}">${m.icon} ${m.name}</span></td><td class="hi-score">${r.score.toLocaleString()}</td><td style="color:var(--muted)">${fmtT(r.duration)}</td><td style="color:var(--muted);font-size:0.75rem">${dt}</td></tr>`;
   }).join('');
   return`<table style="width:100%;border-collapse:collapse;font-size:0.8rem"><thead><tr><th style="text-align:left;padding:6px 10px;color:var(--muted);font-size:0.68rem">#</th><th style="text-align:left;padding:6px 10px;color:var(--muted);font-size:0.68rem">Game</th><th style="text-align:left;padding:6px 10px;color:var(--muted);font-size:0.68rem">Score</th><th style="text-align:left;padding:6px 10px;color:var(--muted);font-size:0.68rem">Duration</th><th style="text-align:left;padding:6px 10px;color:var(--muted);font-size:0.68rem">Time</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -288,7 +433,6 @@ async function clearParticipantData(pid, name) {
     age: user.age, gender: user.gender, joinedTs: user.joinedTs,
     sessionCount:0, bestScore:0, sessions:[]
   });
-  // Overwrite sessions and summary with blank data — does NOT touch ns-user (the account)
   try { await window.storage.set('ns-sessions:'+pidLower, blankSessions, false); } catch(e){}
   try { await window.storage.set('ns-sessions:'+pidLower, blankSessions, true);  } catch(e){}
   try { await window.storage.set('ns-summary:'+pidLower,  blankSummary,  false); } catch(e){}
@@ -302,7 +446,7 @@ async function exportAllCSV(){
   if(!participants.length){alert('No data yet.');return;}
   const rows=[['Session','Participant_ID','Name','Age','Gender','Game','Score','Duration_s','Extra','Timestamp']];
   let n=1;
-  participants.forEach(p=>{p.sessions.forEach(r=>{rows.push([n++,p.pid,p.name,p.age,p.gender,GM[r.key].name,r.score,r.duration,`${GM[r.key].extraLbl}: ${r.extra}`,r.ts]);});});
+  participants.forEach(p=>{p.sessions.forEach(r=>{rows.push([n++,p.pid,p.name,p.age,p.gender,GM[r.key]?GM[r.key].name:r.key,r.score,r.duration,`${GM[r.key]?GM[r.key].extraLbl:'Detail'}: ${r.extra}`,r.ts]);});});
   const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
   a.download=`neurospark_all_${new Date().toISOString().slice(0,10)}.csv`;a.click();
