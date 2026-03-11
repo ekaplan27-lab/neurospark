@@ -63,8 +63,7 @@ async function fsDelete(collection, docId) {
 // ════════════════════════════════════════
 //  AUTH & PERSISTENT STORAGE
 // ════════════════════════════════════════
-// Researcher password stored as SHA-256 hash of 'research2024'
-const RESEARCHER_HASH = '3771defc85408745caaf38e39c2f9b5daa06b1732f649d7e9cec01bcdfefa1b8';
+const RESEARCHER_PASSWORD = 'research2024';
 let currentUser = null;
 let isResearcher = false;
 let isDemoMode = false;
@@ -120,14 +119,11 @@ async function doRegister() {
   } catch(e){err.textContent='❌ Error creating account. Please try again.';}
 }
 
-async function doResearcherLogin() {
+function doResearcherLogin() {
   const pass=document.getElementById('res-pass').value;
   const err=document.getElementById('res-err');
   err.textContent='';
-  const msgBuf = new TextEncoder().encode(pass);
-  const hashBuf = await crypto.subtle.digest('SHA-256', msgBuf);
-  const hashHex = Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-  if(hashHex !== RESEARCHER_HASH){err.textContent='❌ Incorrect researcher password.';return;}
+  if(pass!==RESEARCHER_PASSWORD){err.textContent='❌ Incorrect researcher password.';return;}
   isResearcher=true;
   document.getElementById('auth-screen').style.display='none';
   showResearcherDashboard();
