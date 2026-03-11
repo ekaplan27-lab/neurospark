@@ -64,7 +64,7 @@ async function fsDelete(collection, docId) {
 //  AUTH & PERSISTENT STORAGE
 // ════════════════════════════════════════
 // Researcher password stored as SHA-256 hash of 'research2024'
-const RESEARCHER_HASH = 'ef92b778bafe771207914ef7ac16f0af2cf1da1dd84e32b5dfb6f62e1d7a5c24';
+const RESEARCHER_HASH = '3771defc85408745caaf38e39c2f9b5daa06b1732f649d7e9cec01bcdfefa1b8';
 let currentUser = null;
 let isResearcher = false;
 let isDemoMode = false;
