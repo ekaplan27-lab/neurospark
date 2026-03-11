@@ -1,40 +1,70 @@
 // ════════════════════════════════════════
-//  STORAGE SHIM — uses window.storage if available (Claude.ai),
-//  falls back to localStorage so the app works anywhere
+//  FIREBASE CONFIG — fill in your values here
 // ════════════════════════════════════════
-if (!window.storage) {
-  window.storage = {
-    get: async (key, shared) => {
-      const ns = shared ? 'ns-shared::' : 'ns::';
-      let val = localStorage.getItem(ns + key);
-      if (val === null) val = localStorage.getItem((shared?'ns::':'ns-shared::') + key);
-      if (val === null) throw new Error('Not found');
-      return { key, value: val, shared: !!shared };
-    },
-    set: async (key, value, shared) => {
-      const ns = shared ? 'ns-shared::' : 'ns::';
-      localStorage.setItem(ns + key, value);
-      return { key, value, shared: !!shared };
-    },
-    delete: async (key, shared) => {
-      localStorage.removeItem('ns::' + key);
-      localStorage.removeItem('ns-shared::' + key);
-      return { key, deleted: true };
-    },
-    list: async (prefix, shared) => {
-      const ns = shared ? 'ns-shared::' : 'ns::';
-      const keys = Object.keys(localStorage)
-        .filter(k => k.startsWith(ns + (prefix || '')))
-        .map(k => k.replace(ns, ''));
-      return { keys };
-    }
-  };
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyAADvCeIajFPJyP1KWFHIK7Nhue2rtRuRo",
+  authDomain:        "neurospark-5f11f.firebaseapp.com",
+  projectId:         "neurospark-5f11f",
+  storageBucket:     "neurospark-5f11f.firebasestorage.app",
+  messagingSenderId: "537112070026",
+  appId:             "1:537112070026:web:2174ab27029ba0d9806a73"
+};
+
+const _configOk = Object.values(FIREBASE_CONFIG).every(v => !String(v).includes('PASTE_YOUR'));
+let db = null;
+if (_configOk && typeof firebase !== 'undefined') {
+  try { firebase.initializeApp(FIREBASE_CONFIG); db = firebase.firestore(); }
+  catch(e) { console.warn('Firebase init failed, using localStorage:', e); }
+}
+
+// ════════════════════════════════════════
+//  STORAGE HELPERS — Firebase or localStorage fallback
+// ════════════════════════════════════════
+async function fsGet(collection, docId) {
+  if (db) {
+    try {
+      const snap = await db.collection(collection).doc(docId).get();
+      return snap.exists ? snap.data().value : null;
+    } catch(e) { return null; }
+  }
+  return localStorage.getItem('ns::' + collection + '::' + docId);
+}
+
+async function fsSet(collection, docId, value) {
+  if (db) {
+    try { await db.collection(collection).doc(docId).set({ value, updatedAt: Date.now() }); }
+    catch(e) { console.warn('fsSet error', e); }
+  } else {
+    localStorage.setItem('ns::' + collection + '::' + docId, value);
+  }
+}
+
+async function fsList(collection) {
+  if (db) {
+    try {
+      const snap = await db.collection(collection).get();
+      return snap.docs.map(d => ({ id: d.id, value: d.data().value }));
+    } catch(e) { return []; }
+  }
+  const prefix = 'ns::' + collection + '::';
+  return Object.keys(localStorage)
+    .filter(k => k.startsWith(prefix))
+    .map(k => ({ id: k.replace(prefix, ''), value: localStorage.getItem(k) }));
+}
+
+async function fsDelete(collection, docId) {
+  if (db) {
+    try { await db.collection(collection).doc(docId).delete(); } catch(e) {}
+  } else {
+    localStorage.removeItem('ns::' + collection + '::' + docId);
+  }
 }
 
 // ════════════════════════════════════════
 //  AUTH & PERSISTENT STORAGE
 // ════════════════════════════════════════
-const RESEARCHER_PASSWORD = 'research2024';
+// Researcher password stored as SHA-256 hash of 'research2024'
+const RESEARCHER_HASH = 'ef92b778bafe771207914ef7ac16f0af2cf1da1dd84e32b5dfb6f62e1d7a5c24';
 let currentUser = null;
 let isResearcher = false;
 let isDemoMode = false;
@@ -54,14 +84,14 @@ async function doLogin() {
   err.textContent='';
   if(!pid||!pass){err.textContent='Please fill in all fields.';return;}
   try {
-    const stored=await window.storage.get('ns-user:'+pid.toLowerCase());
+    const stored = await fsGet('ns-users', pid.toLowerCase());
     if(!stored){err.textContent='❌ No account found with that Participant ID.';return;}
-    const user=JSON.parse(stored.value);
+    const user = JSON.parse(stored);
     if(user.password!==btoa(pass)){err.textContent='❌ Incorrect password.';return;}
     currentUser=user;
     await loadUserData(pid.toLowerCase());
     enterApp();
-  } catch(e){err.textContent='❌ Error signing in. Please try again.';}
+  } catch(e){err.textContent='❌ Error signing in. Please try again.';console.error(e);}
 }
 
 async function doRegister() {
@@ -77,25 +107,27 @@ async function doRegister() {
   if(pass!==pass2){err.textContent='❌ Passwords do not match.';return;}
   if(pass.length<4){err.textContent='❌ Password must be at least 4 characters.';return;}
   try {
-    let exists=false;
-    try{const e=await window.storage.get('ns-user:'+pid.toLowerCase());if(e)exists=true;}catch(e){}
-    if(exists){err.textContent='❌ That Participant ID is already taken.';return;}
+    const existing = await fsGet('ns-users', pid.toLowerCase());
+    if(existing){err.textContent='❌ That Participant ID is already taken.';return;}
     const user={pid:pid.toLowerCase(),displayPid:pid,name,age:parseInt(age),gender,password:btoa(pass),joinedTs:new Date().toISOString()};
-    await window.storage.set('ns-user:'+pid.toLowerCase(),JSON.stringify(user));
-    let index=[];
-    try{const idx=await window.storage.get('ns-participant-index',true);if(idx)index=JSON.parse(idx.value);}catch(e){}
-    if(!index.includes(pid.toLowerCase()))index.push(pid.toLowerCase());
-    await window.storage.set('ns-participant-index',JSON.stringify(index),true);
+    await fsSet('ns-users', pid.toLowerCase(), JSON.stringify(user));
+    const idxRaw = await fsGet('ns-meta', 'participant-index');
+    let index = idxRaw ? JSON.parse(idxRaw) : [];
+    if(!index.includes(pid.toLowerCase())) index.push(pid.toLowerCase());
+    await fsSet('ns-meta', 'participant-index', JSON.stringify(index));
     currentUser=user;
     enterApp();
   } catch(e){err.textContent='❌ Error creating account. Please try again.';}
 }
 
-function doResearcherLogin() {
+async function doResearcherLogin() {
   const pass=document.getElementById('res-pass').value;
   const err=document.getElementById('res-err');
   err.textContent='';
-  if(pass!==RESEARCHER_PASSWORD){err.textContent='❌ Incorrect researcher password.';return;}
+  const msgBuf = new TextEncoder().encode(pass);
+  const hashBuf = await crypto.subtle.digest('SHA-256', msgBuf);
+  const hashHex = Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  if(hashHex !== RESEARCHER_HASH){err.textContent='❌ Incorrect researcher password.';return;}
   isResearcher=true;
   document.getElementById('auth-screen').style.display='none';
   showResearcherDashboard();
@@ -103,9 +135,9 @@ function doResearcherLogin() {
 
 async function loadUserData(pidKey) {
   try {
-    const saved=await window.storage.get('ns-sessions:'+pidKey);
+    const saved = await fsGet('ns-sessions', pidKey);
     if(saved){
-      const data=JSON.parse(saved.value);
+      const data = JSON.parse(saved);
       sessionLog=data.sessionLog||[];
       brainScore=data.brainScore||0;
       sessionLog.forEach(r=>{playCount[r.key]=(playCount[r.key]||0)+1;});
@@ -116,13 +148,13 @@ async function loadUserData(pidKey) {
 async function saveUserData() {
   if(!currentUser || isDemoMode) return;
   try {
-    await window.storage.set('ns-sessions:'+currentUser.pid,JSON.stringify({sessionLog,brainScore}));
+    await fsSet('ns-sessions', currentUser.pid, JSON.stringify({sessionLog, brainScore}));
     const summary={pid:currentUser.displayPid,name:currentUser.name,age:currentUser.age,
       gender:currentUser.gender,joinedTs:currentUser.joinedTs,
       sessionCount:sessionLog.length,
       bestScore:sessionLog.length?Math.max(...sessionLog.map(r=>r.score)):0,
       sessions:sessionLog};
-    await window.storage.set('ns-summary:'+currentUser.pid,JSON.stringify(summary),true);
+    await fsSet('ns-summaries', currentUser.pid, JSON.stringify(summary));
   } catch(e){}
 }
 
@@ -211,11 +243,12 @@ async function showResearcherDashboard() {
 }
 
 async function _loadAndRender() {
-  let index=[];
-  try{const idx=await window.storage.get('ns-participant-index',true);if(idx)index=JSON.parse(idx.value);}catch(e){}
-  const participants=[];
+  const idxRaw = await fsGet('ns-meta', 'participant-index');
+  const index = idxRaw ? JSON.parse(idxRaw) : [];
+  const participants = [];
   for(const pid of index){
-    try{const s=await window.storage.get('ns-summary:'+pid,true);if(s)participants.push(JSON.parse(s.value));}catch(e){}
+    const s = await fsGet('ns-summaries', pid);
+    if(s) participants.push(JSON.parse(s));
   }
   renderResearcherDashboard(participants);
 }
@@ -425,18 +458,16 @@ async function clearParticipantData(pid, name) {
   const blankSessions = JSON.stringify({sessionLog:[], brainScore:0});
   let user = {displayPid:pid, name, age:'—', gender:'—', joinedTs:new Date().toISOString()};
   try {
-    const r = await window.storage.get('ns-user:'+pidLower);
-    if(r) user = JSON.parse(r.value);
+    const r = await fsGet('ns-users', pidLower);
+    if(r) user = JSON.parse(r);
   } catch(e){}
   const blankSummary = JSON.stringify({
     pid: user.displayPid||pid, name: user.name||name,
     age: user.age, gender: user.gender, joinedTs: user.joinedTs,
     sessionCount:0, bestScore:0, sessions:[]
   });
-  try { await window.storage.set('ns-sessions:'+pidLower, blankSessions, false); } catch(e){}
-  try { await window.storage.set('ns-sessions:'+pidLower, blankSessions, true);  } catch(e){}
-  try { await window.storage.set('ns-summary:'+pidLower,  blankSummary,  false); } catch(e){}
-  try { await window.storage.set('ns-summary:'+pidLower,  blankSummary,  true);  } catch(e){}
+  await fsSet('ns-sessions', pidLower, blankSessions);
+  await fsSet('ns-summaries', pidLower, blankSummary);
   await showResearcherDashboard();
   alert(`✅ Data cleared for ${name}. Their account is still active and they can continue playing.`);
 }
@@ -513,7 +544,9 @@ function recordSession(key,score,durSecs,extra){
   if(!isDemoMode) playCount[key]=(playCount[key]||0)+1;
   sessionLog.push({key,score,duration:safeDur,extra,ts:new Date().toISOString()});
   refreshTrainStats();updateGameCardButtons();checkAchievements();saveUserData();
-  document.getElementById('streakDays').textContent=sessionLog.length;
+  const _todayStr = new Date().toDateString();
+  const _todayCount = sessionLog.filter(r => new Date(r.ts).toDateString() === _todayStr).length;
+  document.getElementById('streakDays').textContent = _todayCount;
   const bests={pvb:'pv',ffb:'ff',rrb:'rr',llb:'ll',npb:'np',arb:'ar'};
   Object.entries(bests).forEach(([elId,k])=>{
     const rows=sessionLog.filter(r=>r.key===k);
@@ -565,7 +598,8 @@ function renderInsights(){
   Object.keys(GM).forEach(k=>{
     const st=getStats(k);if(!st)return;any=true;const m=GM[k];const mx=st.best||1;
     const bars=st.history.map(s=>`<div style="height:${Math.max(8,Math.round(s/mx*100))}%;background:${m.color};opacity:0.75;flex:1;border-radius:3px 3px 0 0;min-height:3px"></div>`).join('');
-    gc.innerHTML+=`<div class="gcard"><div class="gcard-top"><div class="gcard-name">${m.icon} ${m.name}</div><div class="gcard-plays">${st.plays}/3 plays</div></div>
+    const _playsLabel = k==='ar' ? `${st.plays} plays` : `${st.plays}/3 plays`;
+    gc.innerHTML+=`<div class="gcard"><div class="gcard-top"><div class="gcard-name">${m.icon} ${m.name}</div><div class="gcard-plays">${_playsLabel}</div></div>
       <div class="gcard-stats">
         <div class="gcs"><div class="gcs-val" style="color:${m.color}">${st.best}</div><div class="gcs-lbl">Best</div></div>
         <div class="gcs"><div class="gcs-val">${st.avg}</div><div class="gcs-lbl">Avg</div></div>
